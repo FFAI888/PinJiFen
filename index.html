@@ -2,177 +2,204 @@
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
-    <title>PandaToken 控制台</title>
+    <title>拼积分代币控制面板</title>
+    <!-- 引入 ethers.js v5.7 -->
     <script src="https://cdn.ethers.io/lib/ethers/5.7/ethers.umd.min.js"></script>
     <style>
-        body { font-family: Arial; max-width: 1000px; margin: 20px auto; }
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 20px auto; }
         .section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; }
-        .row { margin: 8px 0; display: flex; align-items: center; }
+        .row { margin: 8px 0; display: flex; align-items: center; flex-wrap: wrap; }
         .label { width: 190px; font-weight: bold; }
-        input, select, button { padding: 6px; margin-right: 8px; }
+        input, select, button { padding: 6px; margin-right: 8px; margin-top: 4px; }
         button { cursor: pointer; }
         .admin-only { background: #eef; border-left: 4px solid #44f; padding-left: 10px; }
         .info { background: #efe; }
-        .error { color: red; }
+        .error { color: red; font-weight: bold; }
+        .comment { font-size: 0.9em; color: #555; margin-left: 10px; }
     </style>
 </head>
 <body>
-    <h2>🐼 PandaToken 控制台</h2>
+    <h2>🐼 拼积分代币控制面板</h2>
+
+    <!-- 合约地址已固定，无需手动输入 -->
     <div class="section">
         <div class="row">
-            <span class="label">合约地址</span>
-            <input id="contractAddr" type="text" size="44" placeholder="0x...">
-            <button onclick="loadContract()">加载合约</button>
+            <span class="label">合约地址（已固定）</span>
+            <span style="font-family: monospace;">0x029fbb47c7d2f737e62501ab116c0c5f455904ce</span>
         </div>
         <button onclick="connectWallet()">连接钱包</button>
         <span id="walletStatus" style="margin-left:15px;"></span>
         <span id="ownerBadge" style="margin-left:15px; font-weight:bold; color:green;"></span>
     </div>
 
-    <!-- 代币基本信息 -->
+    <!-- 代币基本信息（只读） -->
     <div class="section info">
-        <h3>📊 代币信息</h3>
+        <h3>📊 代币基本信息</h3>
         <div class="row"><span class="label">名称</span><span id="name">-</span></div>
         <div class="row"><span class="label">符号</span><span id="symbol">-</span></div>
         <div class="row"><span class="label">精度</span><span id="decimals">-</span></div>
         <div class="row"><span class="label">总供应量</span><span id="totalSupply">-</span></div>
-        <div class="row"><span class="label">流通量(扣除0xdead)</span><span id="circulating">-</span></div>
+        <div class="row"><span class="label">流通量（扣除黑洞地址）</span><span id="circulating">-</span></div>
         <div class="row"><span class="label">暂停状态</span><span id="pause">-</span></div>
-        <div class="row"><span class="label">合约Owner</span><span id="owner">-</span></div>
-        <div class="row"><span class="label">最大钱包限制</span><span id="maxWallet">-</span></div>
+        <div class="row"><span class="label">合约所有者</span><span id="owner">-</span></div>
+        <div class="row"><span class="label">最大钱包限额</span><span id="maxWallet">-</span></div>
     </div>
 
-    <!-- 开关状态 -->
+    <!-- 功能开关状态（只读） -->
     <div class="section admin-only">
-        <h3>🔧 功能开关状态 (仅读)</h3>
-        <div class="row"><span class="label">enableMint</span><span id="enableMint">-</span></div>
-        <div class="row"><span class="label">enablePause</span><span id="enablePause">-</span></div>
-        <div class="row"><span class="label">enableRewardList</span><span id="enableRewardList">-</span></div>
-        <div class="row"><span class="label">enableWalletLimit</span><span id="enableWalletLimit">-</span></div>
-        <div class="row"><span class="label">enableAutoAdjust</span><span id="enableAutoAdjust">-</span></div>
+        <h3>🔧 功能开关状态（只读）</h3>
+        <div class="row"><span class="label">enableMint（允许增发）</span><span id="enableMint">-</span></div>
+        <div class="row"><span class="label">enablePause（允许暂停）</span><span id="enablePause">-</span></div>
+        <div class="row"><span class="label">enableRewardList（奖励黑名单启用）</span><span id="enableRewardList">-</span></div>
+        <div class="row"><span class="label">enableWalletLimit（钱包限额启用）</span><span id="enableWalletLimit">-</span></div>
+        <div class="row"><span class="label">enableAutoAdjust（自动增发/销毁启用）</span><span id="enableAutoAdjust">-</span></div>
     </div>
 
-    <!-- 自动增发/销毁参数 -->
+    <!-- 自动增发/销毁参数（只读） -->
     <div class="section admin-only">
         <h3>📈 自动增发/销毁参数</h3>
-        <div class="row"><span class="label">buyThreshold</span><span id="buyThreshold">-</span></div>
-        <div class="row"><span class="label">sellThreshold</span><span id="sellThreshold">-</span></div>
-        <div class="row"><span class="label">buyFeePercent</span><span id="buyFeePercent">-</span> (分母10000)</div>
-        <div class="row"><span class="label">sellFeePercent</span><span id="sellFeePercent">-</span> (分母10000)</div>
+        <div class="row"><span class="label">买入触发阈值</span><span id="buyThreshold">-</span><span class="comment">（单笔买入量 ≥ 此值可能触发增发）</span></div>
+        <div class="row"><span class="label">卖出触发阈值</span><span id="sellThreshold">-</span><span class="comment">（单笔卖出量 ≥ 此值可能触发销毁）</span></div>
+        <div class="row"><span class="label">买入增发比例</span><span id="buyFeePercent">-</span><span class="comment">（分母 10000）</span></div>
+        <div class="row"><span class="label">卖出销毁比例</span><span id="sellFeePercent">-</span><span class="comment">（分母 10000）</span></div>
     </div>
 
-    <!-- 管理员操作 -->
+    <!-- 管理员操作区 -->
     <div class="section admin-only">
-        <h3>⚙️ 管理员写操作 (需Owner权限)</h3>
+        <h3>⚙️ 管理员操作（需所有者权限）</h3>
 
+        <!-- 增发代币 -->
         <div class="row">
-            <span class="label">mintTokens</span>
+            <span class="label">增发代币</span>
             <input id="mintTo" placeholder="接收地址" size="36">
-            <input id="mintAmount" placeholder="数量(含精度)" size="18">
-            <button onclick="mintTokens()">执行</button>
+            <input id="mintAmount" placeholder="数量（例如 100）" size="18" type="number" step="any">
+            <button onclick="mintTokens()">执行增发</button>
+            <span class="comment">向指定地址增发代币，输入普通数字即可</span>
         </div>
 
+        <!-- 设置全白名单 -->
         <div class="row">
-            <span class="label">setWhiteList</span>
+            <span class="label">设置全白名单</span>
             <input id="wlAddr" placeholder="地址" size="36">
-            <select id="wlEnable"><option value="true">true</option><option value="false">false</option></select>
+            <select id="wlEnable"><option value="true">是（true）</option><option value="false">否（false）</option></select>
             <button onclick="setWhiteList()">执行</button>
+            <span class="comment">全白名单地址可豁免所有限制</span>
         </div>
 
+        <!-- 设置奖励黑名单 -->
         <div class="row">
-            <span class="label">multi_bclist</span>
+            <span class="label">设置奖励黑名单</span>
             <input id="bclAddr" placeholder="地址" size="36">
-            <select id="bclValue"><option value="true">true</option><option value="false">false</option></select>
+            <select id="bclValue"><option value="true">是（true）</option><option value="false">否（false）</option></select>
             <button onclick="multi_bclist()">执行</button>
-            <small>(需 enableRewardList 开启)</small>
+            <span class="comment">（需 enableRewardList 开启）黑名单地址无法转出代币</span>
         </div>
 
+        <!-- 交易对白名单管理 -->
         <div class="row">
-            <span class="label">addAllowedPair</span>
+            <span class="label">添加交易对白名单</span>
             <input id="pairAddr" placeholder="池子合约地址" size="36">
             <button onclick="addAllowedPair()">添加</button>
+            <span class="comment">允许该地址（通常是 DEX 池子）接收代币</span>
         </div>
         <div class="row">
-            <span class="label">removeAllowedPair</span>
+            <span class="label">移除交易对白名单</span>
             <input id="remPairAddr" placeholder="池子合约地址" size="36">
             <button onclick="removeAllowedPair()">移除</button>
         </div>
 
+        <!-- 买入卖出阈值设置 -->
         <div class="row">
-            <span class="label">setBuyThreshold</span>
-            <input id="buyThres" placeholder="数量(含精度)" size="18">
+            <span class="label">设置买入触发阈值</span>
+            <input id="buyThres" placeholder="数量（例如 10）" size="18" type="number" step="any">
             <button onclick="setBuyThreshold()">设置</button>
+            <span class="comment">买入量达到此值才可能增发</span>
         </div>
         <div class="row">
-            <span class="label">setSellThreshold</span>
-            <input id="sellThres" placeholder="数量(含精度)" size="18">
+            <span class="label">设置卖出触发阈值</span>
+            <input id="sellThres" placeholder="数量（例如 10）" size="18" type="number" step="any">
             <button onclick="setSellThreshold()">设置</button>
+            <span class="comment">卖出量达到此值才可能销毁</span>
         </div>
+
+        <!-- 买入卖出费率设置 -->
         <div class="row">
-            <span class="label">setBuyFeePercent</span>
-            <input id="buyFeePct" placeholder="例如200=2%" size="18">
+            <span class="label">设置买入增发比例</span>
+            <input id="buyFeePct" placeholder="如 200 代表 2%" size="18" type="number">
             <button onclick="setBuyFeePercent()">设置</button>
+            <span class="comment">分母 10000，200 即 2%</span>
         </div>
         <div class="row">
-            <span class="label">setSellFeePercent</span>
-            <input id="sellFeePct" placeholder="例如200=2%" size="18">
+            <span class="label">设置卖出销毁比例</span>
+            <input id="sellFeePct" placeholder="如 200 代表 2%" size="18" type="number">
             <button onclick="setSellFeePercent()">设置</button>
         </div>
+
+        <!-- 自动调整总开关 -->
         <div class="row">
-            <span class="label">setEnableAutoAdjust</span>
-            <select id="autoAdj"><option value="true">true</option><option value="false">false</option></select>
+            <span class="label">自动增发/销毁总开关</span>
+            <select id="autoAdj"><option value="true">开启</option><option value="false">关闭</option></select>
             <button onclick="setEnableAutoAdjust()">设置</button>
         </div>
 
+        <!-- 钱包限额修改 -->
         <div class="row">
-            <span class="label">changeWalletLimit</span>
-            <input id="newMax" placeholder="新限额(含精度)" size="18">
+            <span class="label">修改钱包上限</span>
+            <input id="newMax" placeholder="新限额（例如 50000）" size="18" type="number" step="any">
             <button onclick="changeWalletLimit()">设置</button>
         </div>
         <div class="row">
-            <span class="label">disableWalletLimit</span>
-            <button onclick="disableWalletLimit()">永久关闭钱包限制</button>
+            <span class="label">永久关闭钱包限制</span>
+            <button onclick="disableWalletLimit()">执行关闭</button>
+            <span class="comment">不可逆操作</span>
         </div>
 
+        <!-- 暂停/恢复交易 -->
         <div class="row">
-            <span class="label">Pause / Recover</span>
-            <button onclick="pauseTx()">暂停交易</button>
+            <span class="label">交易控制</span>
+            <button onclick="pauseTx()">暂停所有交易</button>
             <button onclick="recoverTx()">恢复交易</button>
         </div>
 
+        <!-- 提取合约资产 -->
         <div class="row">
-            <span class="label">setClaims(提现ETH/代币)</span>
-            <input id="claimToken" placeholder="代币地址(0地址为ETH)" size="36">
-            <input id="claimAmount" placeholder="数量" size="18">
-            <button onclick="setClaims()">执行</button>
+            <span class="label">提取资产（ETH/代币）</span>
+            <input id="claimToken" placeholder="代币地址（0x0 为 ETH）" size="36">
+            <input id="claimAmount" placeholder="数量（ETH 为普通数字）" size="18" type="number" step="any">
+            <button onclick="setClaims()">执行提取</button>
+            <span class="comment">若提取 ETH，数量为正常单位（如 0.1）</span>
         </div>
 
+        <!-- 所有权管理 -->
         <div class="row">
             <span class="label">所有权管理</span>
-            <input id="newOwner" placeholder="新owner地址" size="36">
+            <input id="newOwner" placeholder="新所有者地址" size="36">
             <button onclick="transferOwnership()">转移所有权</button>
-            <button onclick="renounceOwnership()" style="color:red;">放弃所有权⚠️</button>
+            <button onclick="renounceOwnership()" style="color:red;">放弃所有权 ⚠️</button>
         </div>
     </div>
 
-    <!-- 通用查询 -->
+    <!-- 地址查询区 -->
     <div class="section">
-        <h3>🔍 地址查询</h3>
+        <h3>🔍 地址综合查询</h3>
         <div class="row">
             <span class="label">查询地址</span>
-            <input id="queryAddr" placeholder="地址" size="36">
+            <input id="queryAddr" placeholder="输入任意地址" size="36">
             <button onclick="queryAddress()">查询</button>
         </div>
-        <div class="row"><span class="label">余额 (BALANCE)</span><span id="qBalance">-</span></div>
-        <div class="row"><span class="label">全白名单(_allWhiteList)</span><span id="qWl">-</span></div>
-        <div class="row"><span class="label">奖励黑名单(_rewardList)</span><span id="qBl">-</span></div>
-        <div class="row"><span class="label">交易对白名单(allowedPairs)</span><span id="qPair">-</span></div>
+        <div class="row"><span class="label">代币余额</span><span id="qBalance">-</span></div>
+        <div class="row"><span class="label">全白名单状态</span><span id="qWl">-</span></div>
+        <div class="row"><span class="label">奖励黑名单状态</span><span id="qBl">-</span></div>
+        <div class="row"><span class="label">交易对白名单状态</span><span id="qPair">-</span></div>
     </div>
 
     <div class="error" id="error"></div>
 
     <script>
-        let contract, signer, userAddress, contractAddress, decimals = 6;
+        // ---------- 固定配置 ----------
+        // 已部署的合约地址，无需手动输入
+        const CONTRACT_ADDRESS = '0x029fbb47c7d2f737e62501ab116c0c5f455904ce';
+        // 合约 ABI（只包含用到的函数，完整对应合约接口）
         const abi = [
             "function name() view returns (string)",
             "function symbol() view returns (string)",
@@ -215,70 +242,109 @@
             "function transferOwnership(address)"
         ];
 
+        let contract, signer, userAddress, decimals = 6;
+
+        // ---------- 工具函数 ----------
+        // 将用户输入的人类可读数量转换为带精度的整数
+        function parseAmount(inputValue) {
+            if (!inputValue || isNaN(inputValue)) return null;
+            // 使用 ethers 的 parseUnits 自动处理小数，返回 BigNumber
+            try {
+                return ethers.utils.parseUnits(inputValue.toString(), decimals);
+            } catch (e) {
+                showError('数量格式错误，请检查小数位数');
+                return null;
+            }
+        }
+
+        // 格式化显示带精度的数量
+        function formatAmount(bigNum) {
+            return ethers.utils.formatUnits(bigNum, decimals);
+        }
+
+        // ---------- 钱包连接 ----------
         async function connectWallet() {
             try {
                 await window.ethereum.request({ method: 'eth_requestAccounts' });
                 const provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
                 userAddress = await signer.getAddress();
-                document.getElementById('walletStatus').innerHTML = `已连接: ${userAddress}`;
-                if (contractAddress) loadContractData();
-            } catch (e) { showError("连接钱包失败: "+e.message); }
+                document.getElementById('walletStatus').innerHTML = `已连接：${userAddress}`;
+                // 自动加载合约数据
+                loadContract();
+            } catch (e) {
+                showError('连接钱包失败：' + e.message);
+            }
         }
 
+        // ---------- 初始化合约实例并加载数据 ----------
         async function loadContract() {
-            contractAddress = document.getElementById('contractAddr').value.trim();
-            if (!ethers.utils.isAddress(contractAddress)) { showError("无效的合约地址"); return; }
-            if (!signer) { showError("请先连接钱包"); return; }
-            const provider = new ethers.providers.Web3Provider(window.ethereum);
-            contract = new ethers.Contract(contractAddress, abi, provider.getSigner());
-            await loadContractData();
+            if (!signer) {
+                showError('请先连接钱包');
+                return;
+            }
+            try {
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                contract = new ethers.Contract(CONTRACT_ADDRESS, abi, provider.getSigner());
+                await loadContractData();
+            } catch (e) {
+                showError('加载合约失败：' + e.message);
+            }
         }
 
+        // ---------- 刷新所有只读数据 ----------
         async function loadContractData() {
             if (!contract) return;
             try {
+                // 基础信息
                 const [name, symbol, _decimals, total, circ, pauseStatus, ownerAddr, maxW] = await Promise.all([
                     contract.name(), contract.symbol(), contract.decimals(), contract.totalSupply(),
                     contract.getCirculatingSupply(), contract.pause(), contract.owner(), contract.maxWalletAmount()
                 ]);
-                decimals = _decimals;
+                decimals = _decimals.toNumber();
                 document.getElementById('name').innerText = name;
                 document.getElementById('symbol').innerText = symbol;
-                document.getElementById('decimals').innerText = decimals.toString();
-                document.getElementById('totalSupply').innerText = ethers.utils.formatUnits(total, decimals);
-                document.getElementById('circulating').innerText = ethers.utils.formatUnits(circ, decimals);
+                document.getElementById('decimals').innerText = decimals;
+                document.getElementById('totalSupply').innerText = formatAmount(total);
+                document.getElementById('circulating').innerText = formatAmount(circ);
                 document.getElementById('pause').innerText = pauseStatus ? '已暂停' : '正常';
                 document.getElementById('owner').innerText = ownerAddr;
-                document.getElementById('maxWallet').innerText = ethers.utils.formatUnits(maxW, decimals);
+                document.getElementById('maxWallet').innerText = formatAmount(maxW);
 
+                // 开关状态
                 const [eMint, ePause, eReward, eWallet, eAuto] = await Promise.all([
                     contract.enableMint(), contract.enablePause(), contract.enableRewardList(),
                     contract.enableWalletLimit(), contract.enableAutoAdjust()
                 ]);
-                document.getElementById('enableMint').innerText = eMint;
-                document.getElementById('enablePause').innerText = ePause;
-                document.getElementById('enableRewardList').innerText = eReward;
-                document.getElementById('enableWalletLimit').innerText = eWallet;
-                document.getElementById('enableAutoAdjust').innerText = eAuto;
+                document.getElementById('enableMint').innerText = eMint ? '✅ 开启' : '❌ 关闭';
+                document.getElementById('enablePause').innerText = ePause ? '✅ 开启' : '❌ 关闭';
+                document.getElementById('enableRewardList').innerText = eReward ? '✅ 开启' : '❌ 关闭';
+                document.getElementById('enableWalletLimit').innerText = eWallet ? '✅ 开启' : '❌ 关闭';
+                document.getElementById('enableAutoAdjust').innerText = eAuto ? '✅ 开启' : '❌ 关闭';
 
+                // 阈值与费率
                 const [buyTh, sellTh, buyPct, sellPct] = await Promise.all([
                     contract.buyThreshold(), contract.sellThreshold(), contract.buyFeePercent(), contract.sellFeePercent()
                 ]);
-                document.getElementById('buyThreshold').innerText = ethers.utils.formatUnits(buyTh, decimals);
-                document.getElementById('sellThreshold').innerText = ethers.utils.formatUnits(sellTh, decimals);
-                document.getElementById('buyFeePercent').innerText = buyPct.toString() + " / 10000";
-                document.getElementById('sellFeePercent').innerText = sellPct.toString() + " / 10000";
+                document.getElementById('buyThreshold').innerText = formatAmount(buyTh);
+                document.getElementById('sellThreshold').innerText = formatAmount(sellTh);
+                document.getElementById('buyFeePercent').innerText = buyPct.toString() + ' / 10000';
+                document.getElementById('sellFeePercent').innerText = sellPct.toString() + ' / 10000';
 
+                // 标记当前用户是否为所有者
                 const isOwner = (userAddress && ownerAddr.toLowerCase() === userAddress.toLowerCase());
-                document.getElementById('ownerBadge').innerText = isOwner ? '✅ 你是Owner' : '❌ 非Owner';
+                document.getElementById('ownerBadge').innerText = isOwner ? '✅ 你是合约所有者' : '❌ 你非所有者（只能查看）';
+
                 document.getElementById('error').innerText = '';
-            } catch (e) { showError("读取数据错误: "+e.message); }
+            } catch (e) {
+                showError('读取数据错误：' + e.message);
+            }
         }
 
+        // ---------- 地址查询 ----------
         async function queryAddress() {
             const addr = document.getElementById('queryAddr').value.trim();
-            if (!ethers.utils.isAddress(addr)) { showError("地址无效"); return; }
+            if (!ethers.utils.isAddress(addr)) { showError('地址格式无效'); return; }
             try {
                 const [balance, wl, bl, pair] = await Promise.all([
                     contract.balanceOf(addr),
@@ -286,97 +352,150 @@
                     contract._rewardList(addr),
                     contract.allowedPairs(addr)
                 ]);
-                document.getElementById('qBalance').innerText = ethers.utils.formatUnits(balance, decimals);
-                document.getElementById('qWl').innerText = wl ? '✅ true' : '❌ false';
-                document.getElementById('qBl').innerText = bl ? '⚠️ 在黑名单中' : '✅ false';
-                document.getElementById('qPair').innerText = pair ? '✅ true' : '❌ false';
+                document.getElementById('qBalance').innerText = formatAmount(balance);
+                document.getElementById('qWl').innerText = wl ? '✅ 是' : '❌ 否';
+                document.getElementById('qBl').innerText = bl ? '⚠️ 是（禁止转出）' : '✅ 否';
+                document.getElementById('qPair').innerText = pair ? '✅ 是' : '❌ 否';
             } catch (e) { showError(e.message); }
         }
 
+        // ---------- 交易封装与错误处理 ----------
         async function executeTx(txPromise, successMsg) {
             try {
                 const tx = await txPromise;
                 await tx.wait();
-                alert(successMsg || "交易成功");
-                loadContractData();
-            } catch (e) { showError("交易失败: "+e.message); }
+                alert(successMsg || '交易成功');
+                await loadContractData(); // 自动刷新
+            } catch (e) {
+                showError('交易失败：' + (e.reason || e.message));
+            }
         }
 
+        // ---------- 各写操作（自动转换数量）----------
         function mintTokens() {
             const to = document.getElementById('mintTo').value.trim();
-            const amt = document.getElementById('mintAmount').value.trim();
-            if (!to || !amt) { showError("填写地址和数量"); return; }
-            executeTx(contract.mintTokens(to, amt), "增发成功");
+            const rawAmount = document.getElementById('mintAmount').value.trim();
+            if (!to || !rawAmount) { showError('请填写地址和数量'); return; }
+            const amount = parseAmount(rawAmount);
+            if (!amount) return;
+            executeTx(contract.mintTokens(to, amount), '增发成功');
         }
+
         function setWhiteList() {
             const addr = document.getElementById('wlAddr').value.trim();
             const enable = document.getElementById('wlEnable').value === 'true';
-            executeTx(contract.setWhiteList([addr], enable), "白名单设置成功");
+            executeTx(contract.setWhiteList([addr], enable), '全白名单设置成功');
         }
+
         function multi_bclist() {
             const addr = document.getElementById('bclAddr').value.trim();
             const val = document.getElementById('bclValue').value === 'true';
-            executeTx(contract.multi_bclist([addr], val), "奖励黑名单设置成功");
+            executeTx(contract.multi_bclist([addr], val), '奖励黑名单设置成功');
         }
+
         function addAllowedPair() {
             const addr = document.getElementById('pairAddr').value.trim();
-            executeTx(contract.addAllowedPair(addr), "交易对添加成功");
+            executeTx(contract.addAllowedPair(addr), '交易对已添加');
         }
+
         function removeAllowedPair() {
             const addr = document.getElementById('remPairAddr').value.trim();
-            executeTx(contract.removeAllowedPair(addr), "交易对移除成功");
+            executeTx(contract.removeAllowedPair(addr), '交易对已移除');
         }
+
         function setBuyThreshold() {
-            const val = document.getElementById('buyThres').value.trim();
-            executeTx(contract.setBuyThreshold(val), "买入阈值设置成功");
+            const raw = document.getElementById('buyThres').value.trim();
+            const val = parseAmount(raw);
+            if (!val) return;
+            executeTx(contract.setBuyThreshold(val), '买入阈值已设置');
         }
+
         function setSellThreshold() {
-            const val = document.getElementById('sellThres').value.trim();
-            executeTx(contract.setSellThreshold(val), "卖出阈值设置成功");
+            const raw = document.getElementById('sellThres').value.trim();
+            const val = parseAmount(raw);
+            if (!val) return;
+            executeTx(contract.setSellThreshold(val), '卖出阈值已设置');
         }
+
         function setBuyFeePercent() {
-            const val = document.getElementById('buyFeePct').value.trim();
-            executeTx(contract.setBuyFeePercent(val), "买入费率设置成功");
+            const raw = document.getElementById('buyFeePct').value.trim();
+            if (!raw || isNaN(raw)) { showError('请输入有效数字'); return; }
+            executeTx(contract.setBuyFeePercent(raw), '买入增发比例已设置');
         }
+
         function setSellFeePercent() {
-            const val = document.getElementById('sellFeePct').value.trim();
-            executeTx(contract.setSellFeePercent(val), "卖出费率设置成功");
+            const raw = document.getElementById('sellFeePct').value.trim();
+            if (!raw || isNaN(raw)) { showError('请输入有效数字'); return; }
+            executeTx(contract.setSellFeePercent(raw), '卖出销毁比例已设置');
         }
+
         function setEnableAutoAdjust() {
             const val = document.getElementById('autoAdj').value === 'true';
-            executeTx(contract.setEnableAutoAdjust(val), "开关设置成功");
+            executeTx(contract.setEnableAutoAdjust(val), '自动增发/销毁开关已设置');
         }
+
         function changeWalletLimit() {
-            const val = document.getElementById('newMax').value.trim();
-            executeTx(contract.changeWalletLimit(val), "限额修改成功");
+            const raw = document.getElementById('newMax').value.trim();
+            const val = parseAmount(raw);
+            if (!val) return;
+            executeTx(contract.changeWalletLimit(val), '钱包限额已修改');
         }
+
         function disableWalletLimit() {
-            executeTx(contract.disableWalletLimit(), "钱包限制已永久关闭");
+            if (!confirm('确定永久关闭钱包限额？此操作不可逆！')) return;
+            executeTx(contract.disableWalletLimit(), '钱包限额已永久关闭');
         }
+
         function pauseTx() {
-            executeTx(contract.PauseTransaction(), "交易已暂停");
+            executeTx(contract.PauseTransaction(), '交易已暂停');
         }
+
         function recoverTx() {
-            executeTx(contract.recoverTransaction(), "交易已恢复");
+            executeTx(contract.recoverTransaction(), '交易已恢复');
         }
+
         function setClaims() {
             const token = document.getElementById('claimToken').value.trim();
-            const amt = document.getElementById('claimAmount').value.trim();
-            executeTx(contract.setClaims(token, amt), "提现成功");
+            const rawAmount = document.getElementById('claimAmount').value.trim();
+            if (!token || !rawAmount) { showError('请填写代币地址和数量'); return; }
+            // 对于提现 ETH，数量可能是小数，需特殊处理
+            let amount;
+            if (token === '0x0000000000000000000000000000000000000000' || token === '0x0') {
+                // ETH 数量直接使用 wei 单位（按正常数字转换，即 1 ETH = 10^18 wei）
+                try {
+                    amount = ethers.utils.parseEther(rawAmount);
+                } catch (e) {
+                    showError('ETH 数量格式错误');
+                    return;
+                }
+            } else {
+                amount = parseAmount(rawAmount);
+                if (!amount) return;
+            }
+            executeTx(contract.setClaims(token, amount), '资产提取成功');
         }
+
         function transferOwnership() {
             const newOwner = document.getElementById('newOwner').value.trim();
-            if (!ethers.utils.isAddress(newOwner)) { showError("无效地址"); return; }
-            executeTx(contract.transferOwnership(newOwner), "所有权转移成功");
+            if (!ethers.utils.isAddress(newOwner)) { showError('无效地址'); return; }
+            executeTx(contract.transferOwnership(newOwner), '所有权已转移');
         }
+
         function renounceOwnership() {
-            if (!confirm('确定要放弃所有权吗？这将使合约失去管理员。')) return;
-            executeTx(contract.renounceOwnership(), "已放弃所有权");
+            if (!confirm('⚠️ 确定放弃合约所有权吗？此操作不可逆！')) return;
+            executeTx(contract.renounceOwnership(), '所有权已放弃');
         }
 
         function showError(msg) {
             document.getElementById('error').innerText = msg;
         }
+
+        // 页面加载后自动尝试连接（如果已授权过）
+        window.addEventListener('load', async () => {
+            if (window.ethereum && window.ethereum.selectedAddress) {
+                await connectWallet();
+            }
+        });
     </script>
 </body>
 </html>
