@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>拼积分代币控制面板</title>
-    <script src="https://cdn.ethers.io/lib/ethers/5.7/ethers.umd.min.js"></script>
+    <!-- 使用 unpkg 稳定版 ethers -->
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
     <style>
         body { font-family: "Microsoft YaHei", sans-serif; max-width: 1000px; margin: 20px auto; }
         .section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; }
@@ -35,7 +36,7 @@
         </div>
     </div>
 
-    <!-- 代币基本信息 -->
+    <!-- 代币基本信息（只读） -->
     <div class="section info">
         <h3>📊 代币基本信息</h3>
         <div class="row"><span class="label">名称</span><span id="name">-</span></div>
@@ -48,7 +49,7 @@
         <div class="row"><span class="label">最大钱包限额</span><span id="maxWallet">-</span></div>
     </div>
 
-    <!-- 功能开关状态 -->
+    <!-- 功能开关状态（只读） -->
     <div class="section admin-only">
         <h3>🔧 功能开关状态</h3>
         <div class="row"><span class="label">enableMint（允许增发）</span><span id="enableMint">-</span></div>
@@ -58,7 +59,7 @@
         <div class="row"><span class="label">enableAutoAdjust（自动增发/销毁）</span><span id="enableAutoAdjust">-</span></div>
     </div>
 
-    <!-- 自动增发/销毁参数 -->
+    <!-- 自动增发/销毁参数（只读） -->
     <div class="section admin-only">
         <h3>📈 自动增发/销毁参数</h3>
         <div class="row"><span class="label">买入触发阈值</span><span id="buyThreshold">-</span></div>
@@ -67,7 +68,7 @@
         <div class="row"><span class="label">卖出销毁比例</span><span id="sellFeePercent">-</span> (分母10000)</div>
     </div>
 
-    <!-- 管理员操作 -->
+    <!-- 管理员操作（写操作） -->
     <div class="section admin-only">
         <h3>⚙️ 管理员操作（需所有者权限）</h3>
 
@@ -181,7 +182,7 @@
     <div class="error" id="error"></div>
 
     <script>
-        // 合约 ABI（与部署的合约完全对应）
+        // 合约 ABI（与部署合约完全对应）
         const abi = [
             "function name() view returns (string)",
             "function symbol() view returns (string)",
@@ -257,25 +258,27 @@
             }
         }
 
-        // 页面加载时填充保存的地址
+        // 页面加载时填充
         window.addEventListener('load', () => {
             loadSavedAddress();
         });
 
-        // 连接钱包（最简实现）
+        // 连接钱包（稳定版）
         async function connectWallet() {
-            if (!window.ethereum) {
-                showError('未检测到 MetaMask，请安装');
+            if (typeof window.ethereum === 'undefined') {
+                showError('未检测到 MetaMask，请安装钱包插件');
                 return;
             }
             try {
-                // 请求账户
+                // 请求账户授权
                 const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
                 userAddress = accounts[0];
                 const provider = new ethers.providers.Web3Provider(window.ethereum);
                 signer = provider.getSigner();
                 document.getElementById('walletStatus').innerHTML = `已连接：${userAddress}`;
-                // 监听账户变化
+                document.getElementById('error').innerText = '';
+
+                // 监听账户切换
                 window.ethereum.on('accountsChanged', (newAccounts) => {
                     if (newAccounts.length > 0) {
                         userAddress = newAccounts[0];
@@ -287,7 +290,8 @@
                         document.getElementById('walletStatus').innerHTML = '未连接';
                     }
                 });
-                // 连接成功后尝试自动加载已保存的合约
+
+                // 自动加载已保存的合约
                 const saved = localStorage.getItem('pandaTokenContract');
                 if (saved && ethers.utils.isAddress(saved)) {
                     document.getElementById('contractAddrInput').value = saved;
@@ -339,6 +343,7 @@
                     contract.enableWalletLimit(), contract.enableAutoAdjust(),
                     contract.buyThreshold(), contract.sellThreshold(), contract.buyFeePercent(), contract.sellFeePercent()
                 ]);
+
                 document.getElementById('name').innerText = name;
                 document.getElementById('symbol').innerText = symbol;
                 document.getElementById('decimals').innerText = decimals;
@@ -400,7 +405,7 @@
             }
         }
 
-        // 所有写操作函数
+        // 所有写操作
         function mintTokens() {
             const to = document.getElementById('mintTo').value.trim();
             const rawAmount = document.getElementById('mintAmount').value.trim();
