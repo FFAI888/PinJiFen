@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>拼积分控制面板 v1.0.0</title>
+  <title>拼积分控制面板 v1.0.1</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f9; color: #333; }
     h1 { color: #2c3e50; }
     .version { font-size: 14px; color: #888; margin-top: -10px; }
     .section { background: #fff; padding: 16px; margin: 16px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .row { display: flex; align-items: center; margin: 6px 0; }
+    .row { display: flex; align-items: center; margin: 6px 0; flex-wrap: wrap; }
     .row label { width: 220px; font-weight: bold; }
-    .row span, .row input, .row select { flex: 1; }
+    .row span, .row input, .row select { flex: 1; min-width: 200px; }
     input, select, button { padding: 6px 10px; border-radius: 4px; border: 1px solid #ccc; }
     button { background: #3498db; color: white; border: none; cursor: pointer; margin-right: 6px; }
     button:hover { background: #2980b9; }
@@ -21,12 +21,18 @@
     .success { color: green; }
     .flex-table { display: flex; flex-wrap: wrap; }
     .flex-table > div { width: 33%; padding: 4px 0; }
+    .contract-input { display: flex; align-items: center; margin-bottom: 10px; }
+    .contract-input input { flex: 1; margin-right: 10px; }
   </style>
 </head>
 <body>
-  <h1>🐼 拼积分控制面板 <span style="font-size: 14px; color:#888;">v1.0.0</span></h1>
+  <h1>🐼 拼积分控制面板 <span style="font-size: 14px; color:#888;">v1.0.1</span></h1>
   <div id="walletSection" class="section">
-    <button id="connectBtn">连接钱包</button>
+    <div class="contract-input">
+      <label style="width:auto; margin-right:10px;">合约地址：</label>
+      <input id="contractAddressInput" placeholder="0x..." style="flex:1;">
+    </div>
+    <button id="connectBtn">连接钱包并加载合约</button>
     <span id="accountInfo"></span>
     <span id="networkInfo"></span>
   </div>
@@ -73,7 +79,7 @@
   <div class="section">
     <h3>税收参数 (所有数值为万分比，例如200 = 2%)</h3>
     <div id="taxes" class="flex-table"></div>
-    <div>
+    <div class="row">
       <label>统一设置税收 (按顺序8个值，逗号分隔)：</label>
       <input id="taxInput" placeholder="200,100,50,300,150,100,100,200">
       <button id="setTaxesBtn">设置税收</button>
@@ -172,7 +178,7 @@
     <div class="row"><button id="updateRouterBtn">更新路由与交易对</button></div>
   </div>
 
-  <!-- 特殊操作：暂停/恢复、铸造、提取代币 -->
+  <!-- 特殊操作 -->
   <div class="section">
     <h3>特殊操作</h3>
     <div class="row"><button id="pauseBtn">暂停交易</button><button id="unpauseBtn">恢复交易</button></div>
@@ -189,10 +195,7 @@
   </div>
 
   <script>
-    // ============ 合约地址和 ABI ============
-    // 请将 YOUR_CONTRACT_ADDRESS 替换为实际部署的合约地址
-    const contractAddress = "0x_YOUR_CONTRACT_ADDRESS_";
-    // 合约 ABI（精简版，包含所有用到的函数）
+    // 合约 ABI（与之前完全一致）
     const abi = [
       "function name() view returns (string)",
       "function symbol() view returns (string)",
@@ -253,12 +256,17 @@
     let userAddress;
 
     async function connect() {
+      const addrInput = document.getElementById("contractAddressInput").value.trim();
+      if (!ethers.utils.isAddress(addrInput)) {
+        alert("请输入有效的合约地址");
+        return;
+      }
       if (window.ethereum) {
         provider = new ethers.providers.Web3Provider(window.ethereum);
         await provider.send("eth_requestAccounts", []);
         signer = provider.getSigner();
         userAddress = await signer.getAddress();
-        contract = new ethers.Contract(contractAddress, abi, signer);
+        contract = new ethers.Contract(addrInput, abi, signer);
         document.getElementById("accountInfo").innerText = `已连接: ${userAddress}`;
         const network = await provider.getNetwork();
         document.getElementById("networkInfo").innerText = `网络: ${network.name} (${network.chainId})`;
@@ -271,10 +279,9 @@
     async function refreshAll() {
       if (!contract) return;
       try {
-        // 基础信息
+        const dec = await contract.decimals();
         document.getElementById("name").innerText = await contract.name();
         document.getElementById("symbol").innerText = await contract.symbol();
-        const dec = await contract.decimals();
         document.getElementById("decimals").innerText = dec.toString();
         const ts = await contract.totalSupply();
         document.getElementById("totalSupply").innerText = ethers.utils.formatUnits(ts, dec);
@@ -282,14 +289,12 @@
         document.getElementById("circulating").innerText = ethers.utils.formatUnits(circ, dec);
         document.getElementById("owner").innerText = await contract.owner();
 
-        // 实时数据
         document.getElementById("currentPrice").innerText = ethers.utils.formatUnits(await contract.getCurrentPrice(), dec);
         document.getElementById("mainPair").innerText = await contract._mainPair();
         document.getElementById("currency").innerText = await contract.currency();
         document.getElementById("fundAddress").innerText = await contract.fundAddress();
         document.getElementById("router").innerText = await contract._swapRouter();
 
-        // 开关
         document.getElementById("enableMint").innerText = await contract.enableMint();
         document.getElementById("enablePause").innerText = await contract.enablePause();
         document.getElementById("enableRewardList").innerText = await contract.enableRewardList();
@@ -299,16 +304,15 @@
         document.getElementById("enableCooldown").innerText = await contract.enableCooldown();
         document.getElementById("currencyIsEth").innerText = await contract.currencyIsEth();
 
-        // 税率 (8项)
         const taxKeys = [
-          { key: "buyFund", func: "_buyFundFee", label: "买入基金税率" },
-          { key: "buyLP", func: "_buyLPFee", label: "买入LP税率" },
-          { key: "buyBurn", func: "_buyBurnFee", label: "买入销毁税率" },
-          { key: "sellFund", func: "_sellFundFee", label: "卖出基金税率" },
-          { key: "sellLP", func: "_sellLPFee", label: "卖出LP税率" },
-          { key: "sellBurn", func: "_sellBurnFee", label: "卖出销毁税率" },
-          { key: "addLP", func: "_addLiquidityFee", label: "添加流动性税率" },
-          { key: "removeLP", func: "_removeLiquidityFee", label: "移除流动性税率" }
+          { func: "_buyFundFee", label: "买入基金税率" },
+          { func: "_buyLPFee", label: "买入LP税率" },
+          { func: "_buyBurnFee", label: "买入销毁税率" },
+          { func: "_sellFundFee", label: "卖出基金税率" },
+          { func: "_sellLPFee", label: "卖出LP税率" },
+          { func: "_sellBurnFee", label: "卖出销毁税率" },
+          { func: "_addLiquidityFee", label: "添加流动性税率" },
+          { func: "_removeLiquidityFee", label: "移除流动性税率" }
         ];
         const taxDiv = document.getElementById("taxes");
         taxDiv.innerHTML = "";
@@ -319,20 +323,16 @@
           taxDiv.appendChild(div);
         }
 
-        // 最大钱包
         document.getElementById("maxWallet").innerText = ethers.utils.formatUnits(await contract.maxWalletAmount(), dec);
 
-        // LP 燃烧
         document.getElementById("lpBurnRate").innerText = (await contract.lpBurnRate()).toString();
         document.getElementById("lpBurnFrequency").innerText = (await contract.lpBurnFrequency()).toString();
         document.getElementById("lastLpBurnTime").innerText = new Date((await contract.lastLpBurnTime())*1000).toLocaleString();
 
-        // 稳定币
         document.getElementById("stabEnabled").innerText = await contract.enableStabilize();
         document.getElementById("targetPriceMin").innerText = ethers.utils.formatUnits(await contract.targetPriceMin(), dec);
         document.getElementById("targetPriceMax").innerText = ethers.utils.formatUnits(await contract.targetPriceMax(), dec);
 
-        // 冷却
         document.getElementById("cdEnabled").innerText = await contract.enableCooldown();
         document.getElementById("cdBuySingle").innerText = await contract.cooldownBuySingle();
         document.getElementById("cdBuyGlobal").innerText = await contract.cooldownBuyGlobal();
@@ -344,7 +344,6 @@
       }
     }
 
-    // ========== 写操作助手 ==========
     async function execTx(promise) {
       try {
         const tx = await promise;
@@ -352,63 +351,54 @@
         alert("交易成功");
         refreshAll();
       } catch (e) {
-        alert("交易失败: " + (e.message || e));
+        alert("交易失败: " + (e.reason || e.message || e));
       }
     }
 
-    // 绑定事件
     document.getElementById("connectBtn").onclick = connect;
 
-    // 设置税收
     document.getElementById("setTaxesBtn").onclick = () => {
       const arr = document.getElementById("taxInput").value.split(",").map(s => parseInt(s.trim()));
       if (arr.length !== 8) return alert("必须输入8个数值");
       execTx(contract.setTaxes(arr));
     };
 
-    // 设置最大钱包
     document.getElementById("setMaxWalletBtn").onclick = () => {
       const val = document.getElementById("newMaxWallet").value;
       execTx(contract.changeWalletLimit(val));
     };
     document.getElementById("disableWalletLimitBtn").onclick = () => execTx(contract.disableWalletLimit());
 
-    // 全白名单
     document.getElementById("setWhiteBtn").onclick = () => {
       const addrs = document.getElementById("whiteAddr").value.split(",").map(s => s.trim());
       const val = document.getElementById("whiteValue").value === "true";
       execTx(contract.setWhiteList(addrs, val));
     };
 
-    // 奖励黑名单
     document.getElementById("setRewardBtn").onclick = () => {
       const addrs = document.getElementById("rewardAddr").value.split(",").map(s => s.trim());
       const val = document.getElementById("rewardValue").value === "true";
       execTx(contract.multi_bclist(addrs, val));
     };
 
-    // 手续费白名单
     document.getElementById("setFeeWhiteBtn").onclick = () => {
       const addrs = document.getElementById("feeAddr").value.split(",").map(s => s.trim());
       const val = document.getElementById("feeValue").value === "true";
       execTx(contract.setFeeWhiteList(addrs, val));
     };
 
-    // 交易对名单
     document.getElementById("setPairBtn").onclick = () => {
       const addr = document.getElementById("pairAddr").value.trim();
       const status = document.getElementById("pairStatus").value === "true";
       execTx(contract.setSwapPairList(addr, status));
     };
 
-    // LP 燃烧
     document.getElementById("setLpBurnBtn").onclick = () => {
       const rate = document.getElementById("newLpBurnRate").value;
       const freq = document.getElementById("newLpBurnFreq").value;
       execTx(contract.setLpBurnConfig(rate, freq));
     };
 
-    // 稳定配置
     document.getElementById("setStabBtn").onclick = () => {
       const en = document.getElementById("stabEnableInput").value === "true";
       const min = document.getElementById("stabMinInput").value;
@@ -416,7 +406,6 @@
       execTx(contract.setStabilizeConfig(en, min, max));
     };
 
-    // 冷却配置
     document.getElementById("setCdBtn").onclick = () => {
       const en = document.getElementById("cdEnableInput").value === "true";
       const bs = document.getElementById("cdBuySingleInput").value;
@@ -426,33 +415,26 @@
       execTx(contract.setCooldownConfig(en, bs, bg, ss, sg));
     };
 
-    // 暂停/恢复
     document.getElementById("pauseBtn").onclick = () => execTx(contract.PauseTransaction());
     document.getElementById("unpauseBtn").onclick = () => execTx(contract.recoverTransaction());
 
-    // 铸造
     document.getElementById("mintBtn").onclick = () => {
       const addr = document.getElementById("mintAddr").value.trim();
       const amount = document.getElementById("mintAmount").value;
       execTx(contract.mintTokens(addr, amount));
     };
 
-    // 提取
     document.getElementById("claimBtn").onclick = () => {
       const token = document.getElementById("claimToken").value.trim();
       const amount = document.getElementById("claimAmount").value;
       execTx(contract.setClaims(token, amount));
     };
 
-    // 更新路由与交易对
     document.getElementById("updateRouterBtn").onclick = () => {
       const router = document.getElementById("newRouter").value.trim();
       const pair = document.getElementById("newPair").value.trim();
       execTx(contract.updateRouterAndPair(router, pair));
     };
-
-    // 初始自动连接（可选）
-    // window.addEventListener('load', () => { if (window.ethereum) connect(); });
   </script>
 </body>
 </html>
