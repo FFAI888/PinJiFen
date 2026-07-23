@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>拼积分控制面板 v1.0.1</title>
+  <title>拼积分控制面板 v1.1.0</title>
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; margin: 20px; background: #f4f6f9; color: #333; }
     h1 { color: #2c3e50; }
     .version { font-size: 14px; color: #888; margin-top: -10px; }
     .section { background: #fff; padding: 16px; margin: 16px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .row { display: flex; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+    .row { display: flex; align-items: center; margin: 6px 0; flex-wrap: wrap; gap: 10px; }
     .row label { width: 220px; font-weight: bold; }
     .row span, .row input, .row select { flex: 1; min-width: 200px; }
     input, select, button { padding: 6px 10px; border-radius: 4px; border: 1px solid #ccc; }
@@ -23,21 +24,25 @@
     .flex-table > div { width: 33%; padding: 4px 0; }
     .contract-input { display: flex; align-items: center; margin-bottom: 10px; }
     .contract-input input { flex: 1; margin-right: 10px; }
+    .btn-group { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
   </style>
 </head>
 <body>
-  <h1>🐼 拼积分控制面板 <span style="font-size: 14px; color:#888;">v1.0.1</span></h1>
+  <h1>🐼 拼积分控制面板 <span style="font-size: 14px; color:#888;">v1.1.0</span></h1>
   <div id="walletSection" class="section">
     <div class="contract-input">
       <label style="width:auto; margin-right:10px;">合约地址：</label>
       <input id="contractAddressInput" placeholder="0x..." style="flex:1;">
     </div>
-    <button id="connectBtn">连接钱包并加载合约</button>
+    <div class="btn-group">
+      <button id="connectBtn">连接钱包并加载合约</button>
+      <button id="disconnectBtn" style="background:#e74c3c;">断开连接</button>
+    </div>
     <span id="accountInfo"></span>
     <span id="networkInfo"></span>
   </div>
 
-  <!-- 合约基础信息 -->
+  <!-- 合约基础信息 + 用户余额 -->
   <div class="section">
     <h3>合约基础信息</h3>
     <div id="basicInfo" class="flex-table">
@@ -47,16 +52,18 @@
       <div><b>总供应量：</b> <span id="totalSupply">-</span></div>
       <div><b>流通量：</b> <span id="circulating">-</span></div>
       <div><b>所有者：</b> <span id="owner">-</span></div>
+      <div><b>你的代币余额：</b> <span id="yourBalance">-</span></div>
+      <div><b>合约ETH余额：</b> <span id="contractEthBalance">-</span></div>
     </div>
   </div>
 
   <!-- 实时价格与池子信息 -->
   <div class="section">
     <h3>实时数据</h3>
-    <div class="row"><label>当前价格 (以基础货币计价)：</label><span id="currentPrice">-</span></div>
+    <div class="row"><label>当前价格 (以基础货币计价)：</label><span id="currentPrice">-</span> <span class="desc">基于交易对储备计算</span></div>
     <div class="row"><label>主交易对地址：</label><span id="mainPair">-</span></div>
     <div class="row"><label>基础货币地址：</label><span id="currency">-</span></div>
-    <div class="row"><label>基金地址：</label><span id="fundAddress">-</span></div>
+    <div class="row"><label>基金地址 (接收手续费)：</label><span id="fundAddress">-</span></div>
     <div class="row"><label>路由地址：</label><span id="router">-</span></div>
   </div>
 
@@ -64,54 +71,54 @@
   <div class="section">
     <h3>功能开关状态</h3>
     <div id="boolStatus" class="flex-table">
-      <div><b>enableMint：</b><span id="enableMint">-</span></div>
-      <div><b>enablePause：</b><span id="enablePause">-</span></div>
-      <div><b>enableRewardList：</b><span id="enableRewardList">-</span></div>
-      <div><b>enableWalletLimit：</b><span id="enableWalletLimit">-</span></div>
-      <div><b>pause：</b><span id="pause">-</span></div>
-      <div><b>enableStabilize：</b><span id="enableStabilize">-</span></div>
-      <div><b>enableCooldown：</b><span id="enableCooldown">-</span></div>
-      <div><b>currencyIsEth：</b><span id="currencyIsEth">-</span></div>
+      <div><b>enableMint：</b><span id="enableMint">-</span> <span class="desc">允许铸造新代币</span></div>
+      <div><b>enablePause：</b><span id="enablePause">-</span> <span class="desc">允许暂停交易</span></div>
+      <div><b>enableRewardList：</b><span id="enableRewardList">-</span> <span class="desc">启用奖励黑名单</span></div>
+      <div><b>enableWalletLimit：</b><span id="enableWalletLimit">-</span> <span class="desc">启用钱包持币限制</span></div>
+      <div><b>pause (当前暂停)：</b><span id="pause">-</span></div>
+      <div><b>enableStabilize：</b><span id="enableStabilize">-</span> <span class="desc">稳定币自动调节</span></div>
+      <div><b>enableCooldown：</b><span id="enableCooldown">-</span> <span class="desc">交易冷却机制</span></div>
+      <div><b>currencyIsEth：</b><span id="currencyIsEth">-</span> <span class="desc">基础货币是否为原生ETH</span></div>
     </div>
   </div>
 
   <!-- 税收参数 -->
   <div class="section">
-    <h3>税收参数 (所有数值为万分比，例如200 = 2%)</h3>
+    <h3>税收参数 (单位：万分比，如200=2%)</h3>
     <div id="taxes" class="flex-table"></div>
     <div class="row">
-      <label>统一设置税收 (按顺序8个值，逗号分隔)：</label>
+      <label>统一设置税收 (8个值，逗号分隔)：</label>
       <input id="taxInput" placeholder="200,100,50,300,150,100,100,200">
       <button id="setTaxesBtn">设置税收</button>
-      <span class="desc">总买入税 ≤ 25%，总卖出税 ≤ 25%</span>
     </div>
+    <div class="desc">买入税率总和 ≤ 25%，卖出税率总和 ≤ 25%，否则交易回滚。</div>
   </div>
 
   <!-- 最大钱包限制 -->
   <div class="section">
     <h3>持币限制</h3>
-    <div class="row"><label>当前最大钱包量：</label><span id="maxWallet">-</span></div>
-    <div class="row"><label>修改最大钱包量：</label><input id="newMaxWallet" placeholder="数值（代币最小单位）"><button id="setMaxWalletBtn">设置</button></div>
-    <div class="row"><label>禁用钱包限制：</label><button id="disableWalletLimitBtn">禁用</button></div>
+    <div class="row"><label>当前最大钱包量：</label><span id="maxWallet">-</span> <span class="desc">（代币最小单位）</span></div>
+    <div class="row"><label>修改最大钱包量：</label><input id="newMaxWallet" placeholder="数值"><button id="setMaxWalletBtn">设置</button></div>
+    <div class="row"><label>禁用钱包限制：</label><button id="disableWalletLimitBtn">永久禁用</button><span class="desc">调用后enableWalletLimit变为false</span></div>
   </div>
 
-  <!-- 黑白名单管理 -->
+  <!-- 黑白名单管理 + 查询 -->
   <div class="section">
-    <h3>全白名单管理 (_allWhiteList)</h3>
-    <div class="row"><label>地址 (逗号分隔多个)：</label><input id="whiteAddr" placeholder="0x..."></div>
+    <h3>名单管理 & 地址查询</h3>
+    <div class="row"><label>查询地址：</label><input id="queryAddr" placeholder="0x..."><button id="queryBtn">查询该地址状态</button></div>
+    <div id="queryResult" style="margin-top:10px;"></div>
+    <hr>
+    <div><b>全白名单 (_allWhiteList)</b> <span class="desc">跳过大多数限制，包括添加流动性</span></div>
+    <div class="row"><label>地址 (逗号分隔)：</label><input id="whiteAddr" placeholder="0x..."></div>
     <div class="row"><label>设为：</label><select id="whiteValue"><option value="true">true</option><option value="false">false</option></select></div>
     <div class="row"><button id="setWhiteBtn">设置全白名单</button></div>
-  </div>
-
-  <div class="section">
-    <h3>奖励黑名单管理 (_rewardList)</h3>
-    <div class="row"><label>地址 (逗号分隔，最多200个)：</label><input id="rewardAddr" placeholder="0x..."></div>
+    <hr>
+    <div><b>奖励黑名单 (_rewardList)</b> <span class="desc">被列入者无法转账（需 enableRewardList 开启）</span></div>
+    <div class="row"><label>地址 (逗号分隔，最多200)：</label><input id="rewardAddr" placeholder="0x..."></div>
     <div class="row"><label>设为：</label><select id="rewardValue"><option value="true">true</option><option value="false">false</option></select></div>
-    <div class="row"><button id="setRewardBtn">设置奖励名单</button><span class="desc">要求 enableRewardList 开启</span></div>
-  </div>
-
-  <div class="section">
-    <h3>手续费白名单管理 (_feeWhiteList)</h3>
+    <div class="row"><button id="setRewardBtn">设置奖励名单</button></div>
+    <hr>
+    <div><b>手续费白名单 (_feeWhiteList)</b> <span class="desc">免除所有买入/卖出税费</span></div>
     <div class="row"><label>地址 (逗号分隔)：</label><input id="feeAddr" placeholder="0x..."></div>
     <div class="row"><label>设为：</label><select id="feeValue"><option value="true">true</option><option value="false">false</option></select></div>
     <div class="row"><button id="setFeeWhiteBtn">设置手续费白名单</button></div>
@@ -123,6 +130,7 @@
     <div class="row"><label>交易对地址：</label><input id="pairAddr" placeholder="0x..."></div>
     <div class="row"><label>状态：</label><select id="pairStatus"><option value="true">true</option><option value="false">false</option></select></div>
     <div class="row"><button id="setPairBtn">设置交易对</button></div>
+    <div class="desc">标记为交易对后，对该地址的转账将收取税费或触发特殊逻辑。</div>
   </div>
 
   <!-- LP 燃烧配置 -->
@@ -133,21 +141,22 @@
     <div class="row"><label>上次燃烧时间戳：</label><span id="lastLpBurnTime">-</span></div>
     <div class="row">
       <label>新速率：</label><input id="newLpBurnRate" placeholder="10">
-      <label>新频率：</label><input id="newLpBurnFreq" placeholder="3600">
-      <button id="setLpBurnBtn">更新</button>
+      <label>新频率 (秒)：</label><input id="newLpBurnFreq" placeholder="3600">
+      <button id="setLpBurnBtn">更新配置</button>
     </div>
+    <div class="desc">每次卖出后自动检查是否达到燃烧频率，若达到则销毁交易对中一定比例代币，同步储备。</div>
   </div>
 
   <!-- 稳定币调节 -->
   <div class="section">
     <h3>稳定币调节配置</h3>
     <div class="row"><label>开关 enableStabilize：</label><span id="stabEnabled">-</span></div>
-    <div class="row"><label>目标最低价 (以最小单位计)：</label><span id="targetPriceMin">-</span></div>
-    <div class="row"><label>目标最高价 (以最小单位计)：</label><span id="targetPriceMax">-</span></div>
+    <div class="row"><label>目标最低价：</label><span id="targetPriceMin">-</span> <span class="desc">低于此价格时合约自动回购并销毁</span></div>
+    <div class="row"><label>目标最高价：</label><span id="targetPriceMax">-</span> <span class="desc">高于此价格时合约自动增发并卖出</span></div>
     <div class="row">
       <label>启用：</label><select id="stabEnableInput"><option value="true">true</option><option value="false">false</option></select>
-      <label>最低价：</label><input id="stabMinInput" placeholder="0">
-      <label>最高价：</label><input id="stabMaxInput" placeholder="0">
+      <label>最低价 (最小单位)：</label><input id="stabMinInput" placeholder="0">
+      <label>最高价 (最小单位)：</label><input id="stabMaxInput" placeholder="0">
       <button id="setStabBtn">设置稳定配置</button>
     </div>
   </div>
@@ -162,12 +171,13 @@
     <div class="row"><label>卖出全局冷却 (秒)：</label><span id="cdSellGlobal">-</span></div>
     <div class="row">
       <label>启用：</label><select id="cdEnableInput"><option value="true">true</option><option value="false">false</option></select>
-      <label>买单人：</label><input id="cdBuySingleInput" placeholder="0">
-      <label>买全局：</label><input id="cdBuyGlobalInput" placeholder="0">
-      <label>卖单人：</label><input id="cdSellSingleInput" placeholder="0">
-      <label>卖全局：</label><input id="cdSellGlobalInput" placeholder="0">
+      <label>买单人冷却：</label><input id="cdBuySingleInput" placeholder="0">
+      <label>买全局冷却：</label><input id="cdBuyGlobalInput" placeholder="0">
+      <label>卖单人冷却：</label><input id="cdSellSingleInput" placeholder="0">
+      <label>卖全局冷却：</label><input id="cdSellGlobalInput" placeholder="0">
       <button id="setCdBtn">设置冷却</button>
     </div>
+    <div class="desc">冷却时间单位秒，0表示不限制。</div>
   </div>
 
   <!-- 路由与主交易对更新 -->
@@ -175,27 +185,28 @@
     <h3>更新路由与主交易对</h3>
     <div class="row"><label>新路由地址：</label><input id="newRouter" placeholder="0x..."></div>
     <div class="row"><label>新主交易对：</label><input id="newPair" placeholder="0x..."></div>
-    <div class="row"><button id="updateRouterBtn">更新路由与交易对</button></div>
+    <div class="row"><button id="updateRouterBtn">更新</button></div>
+    <div class="desc">合约所有者可以更换 DEX 路由和主交易对，同时新交易对自动加入 _swapPairList。</div>
   </div>
 
   <!-- 特殊操作 -->
   <div class="section">
-    <h3>特殊操作</h3>
-    <div class="row"><button id="pauseBtn">暂停交易</button><button id="unpauseBtn">恢复交易</button></div>
-    <div class="row"><label>铸造代币 (仅限 enableMint=true)：</label></div>
+    <h3>特殊操作 (仅所有者)</h3>
+    <div class="row"><button id="pauseBtn">暂停交易</button><button id="unpauseBtn">恢复交易</button> <span class="desc">需要 enablePause 开启才能暂停</span></div>
+    <div class="row"><label>铸造代币 (需 enableMint=true)：</label></div>
     <div class="row"><label>目标地址：</label><input id="mintAddr" placeholder="0x..."><label>数量：</label><input id="mintAmount" placeholder="代币最小单位"></div>
     <div class="row"><button id="mintBtn">铸造</button></div>
-    <div class="row"><label>提取合约内其他代币/ETH：</label></div>
+    <div class="row"><label>提取合约内代币/ETH：</label></div>
     <div class="row"><label>代币地址 (0x0 为ETH)：</label><input id="claimToken" placeholder="0x..."><label>数量：</label><input id="claimAmount" placeholder=""></div>
     <div class="row"><button id="claimBtn">提取</button></div>
   </div>
 
   <div class="section">
-    <p class="desc">提示：所有写操作需要 MetaMask 确认交易，请确保当前账户为合约所有者。</p>
+    <p class="desc">提示：所有写操作需要 MetaMask 确认交易。合约地址会自动保存到浏览器中。</p>
   </div>
 
   <script>
-    // 合约 ABI（与之前完全一致）
+    // ============ ABI ============
     const abi = [
       "function name() view returns (string)",
       "function symbol() view returns (string)",
@@ -235,6 +246,10 @@
       "function _addLiquidityFee() view returns (uint256)",
       "function _removeLiquidityFee() view returns (uint256)",
       "function getCirculatingSupply() view returns (uint256)",
+      "function _allWhiteList(address) view returns (bool)",
+      "function _rewardList(address) view returns (bool)",
+      "function _feeWhiteList(address) view returns (bool)",
+      "function _swapPairList(address) view returns (bool)",
       "function setTaxes(uint256[8] taxes)",
       "function setFeeWhiteList(address[] addr, bool enable)",
       "function setWhiteList(address[] addr, bool enable)",
@@ -254,40 +269,77 @@
 
     let provider, signer, contract;
     let userAddress;
+    const STORAGE_KEY = "panda_contract_addr";
 
+    // ---------- 自动保存/加载合约地址 ----------
+    function saveContractAddress(addr) {
+      localStorage.setItem(STORAGE_KEY, addr);
+    }
+    function loadContractAddress() {
+      return localStorage.getItem(STORAGE_KEY) || "";
+    }
+    // 页面加载时填充
+    window.addEventListener('load', () => {
+      document.getElementById("contractAddressInput").value = loadContractAddress();
+    });
+
+    // ---------- 连接钱包 ----------
     async function connect() {
       const addrInput = document.getElementById("contractAddressInput").value.trim();
       if (!ethers.utils.isAddress(addrInput)) {
         alert("请输入有效的合约地址");
         return;
       }
-      if (window.ethereum) {
-        provider = new ethers.providers.Web3Provider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        signer = provider.getSigner();
-        userAddress = await signer.getAddress();
-        contract = new ethers.Contract(addrInput, abi, signer);
-        document.getElementById("accountInfo").innerText = `已连接: ${userAddress}`;
-        const network = await provider.getNetwork();
-        document.getElementById("networkInfo").innerText = `网络: ${network.name} (${network.chainId})`;
-        refreshAll();
-      } else {
+      if (!window.ethereum) {
         alert("请安装 MetaMask");
+        return;
       }
+      provider = new ethers.providers.Web3Provider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      signer = provider.getSigner();
+      userAddress = await signer.getAddress();
+      contract = new ethers.Contract(addrInput, abi, signer);
+      document.getElementById("accountInfo").innerText = `已连接: ${userAddress}`;
+      const network = await provider.getNetwork();
+      document.getElementById("networkInfo").innerText = `网络: ${network.name} (${network.chainId})`;
+      saveContractAddress(addrInput);
+      refreshAll();
     }
 
+    function disconnect() {
+      provider = null;
+      signer = null;
+      contract = null;
+      userAddress = null;
+      document.getElementById("accountInfo").innerText = "";
+      document.getElementById("networkInfo").innerText = "";
+      // 清空所有显示
+      document.querySelectorAll("span[id]").forEach(el => { if (el.id !== 'accountInfo' && el.id !== 'networkInfo') el.innerText = '-'; });
+    }
+
+    // ---------- 刷新所有数据 ----------
     async function refreshAll() {
-      if (!contract) return;
+      if (!contract || !provider) return;
       try {
         const dec = await contract.decimals();
+        const symbol = await contract.symbol();
         document.getElementById("name").innerText = await contract.name();
-        document.getElementById("symbol").innerText = await contract.symbol();
+        document.getElementById("symbol").innerText = symbol;
         document.getElementById("decimals").innerText = dec.toString();
         const ts = await contract.totalSupply();
         document.getElementById("totalSupply").innerText = ethers.utils.formatUnits(ts, dec);
         const circ = await contract.getCirculatingSupply();
         document.getElementById("circulating").innerText = ethers.utils.formatUnits(circ, dec);
         document.getElementById("owner").innerText = await contract.owner();
+
+        // 用户代币余额
+        if (userAddress) {
+          const bal = await contract.balanceOf(userAddress);
+          document.getElementById("yourBalance").innerText = `${ethers.utils.formatUnits(bal, dec)} ${symbol}`;
+        }
+        // 合约ETH余额
+        const ethBal = await provider.getBalance(contract.address);
+        document.getElementById("contractEthBalance").innerText = `${ethers.utils.formatEther(ethBal)} ETH`;
 
         document.getElementById("currentPrice").innerText = ethers.utils.formatUnits(await contract.getCurrentPrice(), dec);
         document.getElementById("mainPair").innerText = await contract._mainPair();
@@ -327,23 +379,25 @@
 
         document.getElementById("lpBurnRate").innerText = (await contract.lpBurnRate()).toString();
         document.getElementById("lpBurnFrequency").innerText = (await contract.lpBurnFrequency()).toString();
-        document.getElementById("lastLpBurnTime").innerText = new Date((await contract.lastLpBurnTime())*1000).toLocaleString();
+        const lastBurn = await contract.lastLpBurnTime();
+        document.getElementById("lastLpBurnTime").innerText = lastBurn.eq(0) ? "从未" : new Date(lastBurn.toNumber()*1000).toLocaleString();
 
         document.getElementById("stabEnabled").innerText = await contract.enableStabilize();
         document.getElementById("targetPriceMin").innerText = ethers.utils.formatUnits(await contract.targetPriceMin(), dec);
         document.getElementById("targetPriceMax").innerText = ethers.utils.formatUnits(await contract.targetPriceMax(), dec);
 
         document.getElementById("cdEnabled").innerText = await contract.enableCooldown();
-        document.getElementById("cdBuySingle").innerText = await contract.cooldownBuySingle();
-        document.getElementById("cdBuyGlobal").innerText = await contract.cooldownBuyGlobal();
-        document.getElementById("cdSellSingle").innerText = await contract.cooldownSellSingle();
-        document.getElementById("cdSellGlobal").innerText = await contract.cooldownSellGlobal();
+        document.getElementById("cdBuySingle").innerText = (await contract.cooldownBuySingle()).toString();
+        document.getElementById("cdBuyGlobal").innerText = (await contract.cooldownBuyGlobal()).toString();
+        document.getElementById("cdSellSingle").innerText = (await contract.cooldownSellSingle()).toString();
+        document.getElementById("cdSellGlobal").innerText = (await contract.cooldownSellGlobal()).toString();
 
       } catch (e) {
         console.error(e);
       }
     }
 
+    // ---------- 交易执行辅助 ----------
     async function execTx(promise) {
       try {
         const tx = await promise;
@@ -355,7 +409,36 @@
       }
     }
 
+    // ---------- 查询地址状态 ----------
+    async function queryAddressStatus() {
+      const addr = document.getElementById("queryAddr").value.trim();
+      if (!ethers.utils.isAddress(addr)) {
+        document.getElementById("queryResult").innerHTML = "<span class='error'>请输入有效地址</span>";
+        return;
+      }
+      try {
+        const [white, reward, fee, pair] = await Promise.all([
+          contract._allWhiteList(addr),
+          contract._rewardList(addr),
+          contract._feeWhiteList(addr),
+          contract._swapPairList(addr)
+        ]);
+        document.getElementById("queryResult").innerHTML = `
+          <b>${addr}</b><br>
+          全白名单: ${white ? "✅" : "❌"} &nbsp;
+          奖励黑名单: ${reward ? "✅(在黑名单中)" : "❌(不在)"} &nbsp;
+          手续费白名单: ${fee ? "✅" : "❌"} &nbsp;
+          交易对标记: ${pair ? "✅" : "❌"}
+        `;
+      } catch (e) {
+        document.getElementById("queryResult").innerHTML = `<span class='error'>查询失败: ${e.message}</span>`;
+      }
+    }
+
+    // ---------- 事件绑定 ----------
     document.getElementById("connectBtn").onclick = connect;
+    document.getElementById("disconnectBtn").onclick = disconnect;
+    document.getElementById("queryBtn").onclick = queryAddressStatus;
 
     document.getElementById("setTaxesBtn").onclick = () => {
       const arr = document.getElementById("taxInput").value.split(",").map(s => parseInt(s.trim()));
@@ -365,37 +448,43 @@
 
     document.getElementById("setMaxWalletBtn").onclick = () => {
       const val = document.getElementById("newMaxWallet").value;
+      if (!val) return alert("请输入数值");
       execTx(contract.changeWalletLimit(val));
     };
     document.getElementById("disableWalletLimitBtn").onclick = () => execTx(contract.disableWalletLimit());
 
     document.getElementById("setWhiteBtn").onclick = () => {
-      const addrs = document.getElementById("whiteAddr").value.split(",").map(s => s.trim());
+      const addrs = document.getElementById("whiteAddr").value.split(",").map(s => s.trim()).filter(a => a);
       const val = document.getElementById("whiteValue").value === "true";
+      if (addrs.length === 0) return alert("请输入地址");
       execTx(contract.setWhiteList(addrs, val));
     };
 
     document.getElementById("setRewardBtn").onclick = () => {
-      const addrs = document.getElementById("rewardAddr").value.split(",").map(s => s.trim());
+      const addrs = document.getElementById("rewardAddr").value.split(",").map(s => s.trim()).filter(a => a);
       const val = document.getElementById("rewardValue").value === "true";
+      if (addrs.length === 0) return alert("请输入地址");
       execTx(contract.multi_bclist(addrs, val));
     };
 
     document.getElementById("setFeeWhiteBtn").onclick = () => {
-      const addrs = document.getElementById("feeAddr").value.split(",").map(s => s.trim());
+      const addrs = document.getElementById("feeAddr").value.split(",").map(s => s.trim()).filter(a => a);
       const val = document.getElementById("feeValue").value === "true";
+      if (addrs.length === 0) return alert("请输入地址");
       execTx(contract.setFeeWhiteList(addrs, val));
     };
 
     document.getElementById("setPairBtn").onclick = () => {
       const addr = document.getElementById("pairAddr").value.trim();
       const status = document.getElementById("pairStatus").value === "true";
+      if (!addr) return alert("请输入交易对地址");
       execTx(contract.setSwapPairList(addr, status));
     };
 
     document.getElementById("setLpBurnBtn").onclick = () => {
       const rate = document.getElementById("newLpBurnRate").value;
       const freq = document.getElementById("newLpBurnFreq").value;
+      if (!rate || !freq) return alert("请输入速率和频率");
       execTx(contract.setLpBurnConfig(rate, freq));
     };
 
@@ -403,6 +492,7 @@
       const en = document.getElementById("stabEnableInput").value === "true";
       const min = document.getElementById("stabMinInput").value;
       const max = document.getElementById("stabMaxInput").value;
+      if (!min || !max) return alert("请输入最低价和最高价");
       execTx(contract.setStabilizeConfig(en, min, max));
     };
 
@@ -421,18 +511,21 @@
     document.getElementById("mintBtn").onclick = () => {
       const addr = document.getElementById("mintAddr").value.trim();
       const amount = document.getElementById("mintAmount").value;
+      if (!addr || !amount) return alert("请输入地址和数量");
       execTx(contract.mintTokens(addr, amount));
     };
 
     document.getElementById("claimBtn").onclick = () => {
       const token = document.getElementById("claimToken").value.trim();
       const amount = document.getElementById("claimAmount").value;
+      if (!token || !amount) return alert("请输入代币地址和数量");
       execTx(contract.setClaims(token, amount));
     };
 
     document.getElementById("updateRouterBtn").onclick = () => {
       const router = document.getElementById("newRouter").value.trim();
       const pair = document.getElementById("newPair").value.trim();
+      if (!router || !pair) return alert("请输入新路由和交易对地址");
       execTx(contract.updateRouterAndPair(router, pair));
     };
   </script>
